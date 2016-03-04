@@ -18,10 +18,19 @@ public class SearchResult implements Iterator{
 		currentrows++;
 
 	}
+	public boolean print(int row){
+
+		for (int i = 0; i < table[row].length; i++) {
+			if(table[row][i] != null){
+				return true;
+			}
+		}
+		return false;
+	}
 	
 	@Override
 	public boolean hasNext() {
-		if(pointer==currentrows )
+		if(pointer==currentrows || !print(pointer))
 		return false;
 		
 		return true;

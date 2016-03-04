@@ -49,16 +49,17 @@ public class DBApp {
 		int columns = 0;
 		for (String key : htblColNameType.keySet()) {
 			String colName = key;
+			boolean primary = (strKeyColName.equals(colName));
 			columns++;
 			String colType = htblColNameType.get(key);
 			String ref = htblColNameRefs.get(key);
 			String meta = "";
 			if (ref == null) {
 				meta = strTableName + "," + colName + "," + colType + ","
-						+ strKeyColName + "," + "False, null";
+						+ primary + "," + "False, null";
 			} else {
 				meta = strTableName + "," + colName + "," + colType + ","
-						+ strKeyColName + "," + "False" + "," + ref;
+						+ primary + "," + "False" + "," + ref;
 			}
 			w.append(meta);
 			w.newLine();
@@ -141,14 +142,180 @@ public class DBApp {
 
 	}
 
-	public void updateTable(String strTableName, String strKey,
-			Hashtable<String, Object> htblColNameValue) throws DBAppException {
+	public void updateTable(String strTableName, Object strKey,
+			Hashtable<String, Object> htblColNameValue) throws DBAppException,
+			IOException, ClassNotFoundException {
 
+		ArrayList<String> pages = getFiles(strTableName);
+		// getting column position
+		int position = findColumn(strTableName);
+		// use the above loop in a mthod called find column
+		// getting row number in page
+		Page p;
+		int row = 0;
+		for (String pageName : pages) {
+			ObjectInputStream ois = new ObjectInputStream(new FileInputStream(
+					new File(pageName)));
+			p = (Page) ois.readObject();
+			ois.close();
+			row = p.findRow(strKey.toString(), position);
+			if (row == -1) {
+				System.out.println("koko");
+				continue;
+
+			} else {
+				for (String columnName : htblColNameValue.keySet()) {
+					int columnIndex = findColumn(strTableName, columnName);
+					p.updateRow(htblColNameValue.get(columnName).toString(),
+							row, columnIndex);
+					p.save();
+				}
+
+			}
+
+		}
+
+	}
+
+	public int findColumn(String strTableName, String columnName)
+			throws IOException {
+		BufferedReader br = new BufferedReader(new FileReader(f));
+		String line = "";
+		int position = 0;
+		while ((line = br.readLine()) != null) {
+			String[] x = line.split(",");
+			if (x[0].equalsIgnoreCase(strTableName)) {
+				if (!x[1].equalsIgnoreCase(columnName)) {
+					position++;
+				} else {
+					break;
+				}
+			}
+
+		}
+		return position;
+	}
+
+	public int findColumn(String strTableName) throws IOException {
+		BufferedReader br = new BufferedReader(new FileReader(f));
+		String line = "";
+		int position = 0;
+		while ((line = br.readLine()) != null) {
+			String[] x = line.split(",");
+			if (x[0].equalsIgnoreCase(strTableName)) {
+				if (x[3].equalsIgnoreCase("false")) {
+					position++;
+				} else {
+					break;
+				}
+			}
+
+		}
+		return position;
 	}
 
 	public void deleteFromTable(String strTableName,
 			Hashtable<String, Object> htblColNameValue, String strOperator)
 			throws DBEngineException {
+		try {
+
+			ArrayList<String> x = new ArrayList<String>();
+			for (String key : htblColNameValue.keySet()) {
+				x.add(key);
+			}
+			Hashtable<String, Integer> colNameIndex = findColNumber(strTableName, x);
+			ArrayList<String> pages = getFiles(strTableName);
+			BufferedReader b;
+			// Hashtable<Integer, Object> Comparingtable = new
+			// Hashtable<Integer, Object>();
+			ArrayList<Integer> ColIndex = new ArrayList<Integer>();
+			ArrayList<Object> ColVal = new ArrayList<Object>();
+			ArrayList<String> ColType = findColTypes(strTableName);
+			// ColIndex has an index for every value in ColVal
+			for (String NameIndex : colNameIndex.keySet()) {
+				for (String NameVal : htblColNameValue.keySet()) {
+					if (NameVal.equalsIgnoreCase(NameIndex)) {
+						ColIndex.add(colNameIndex.get(NameIndex));
+						ColVal.add(htblColNameValue.get(NameVal));
+					}
+				}
+			}
+			ObjectInputStream oss = new ObjectInputStream(new FileInputStream(
+					new File(pages.get(0))));
+			Page p = (Page) oss.readObject();
+			oss.close();
+
+			if (strOperator.equalsIgnoreCase("and")) {
+				// and
+
+				for (String pageName : pages) {
+					ObjectInputStream ois = new ObjectInputStream(
+							new FileInputStream(new File(pageName)));
+					p = (Page) ois.readObject();
+					ois.close();
+					String line = "";
+					boolean flag = true;
+					for (int j = 0; j < p.page.length; j++) {
+						flag = true;
+						line = Arrays.toString(p.page[j]);
+						line = line.replace("[", "");
+						line = line.replace("]", "");
+						String[] temp = line.split(",");
+						for (int i = 0; i < ColIndex.size(); i++) {
+							String compare = temp[ColIndex.get(i)].toString()
+									.replace(" ", "");
+							String compare2 = ColVal.get(i).toString()
+									.replace(" ", "");
+							if (compare2.equalsIgnoreCase(compare)) {
+							} else {
+								flag = false;
+							}
+						}
+						if (flag) {
+							// System.err.println(Arrays.toString(temp));
+							p.deleteRow(j);
+						}
+
+					}
+				}
+			} else if (strOperator.equalsIgnoreCase("or")) {
+				// or
+
+				for (String pageName : pages) {
+					ObjectInputStream ois = new ObjectInputStream(
+							new FileInputStream(new File(pageName)));
+					p = (Page) ois.readObject();
+					ois.close();
+					String line = "";
+					for (int j = 0; j < p.page.length; j++) {
+						line = Arrays.toString(p.page[j]);
+						line = line.replace("[", "");
+						line = line.replace("]", "");
+						String[] temp = line.split(",");
+						// System.out.println(line);
+						// System.out.println(Arrays.toString(temp));
+						for (int i = 0; i < ColIndex.size(); i++) {
+							String compare = temp[ColIndex.get(i)].toString()
+									.replace(" ", "");
+							String compare2 = ColVal.get(i).toString()
+									.replace(" ", "");
+							if (compare2.equalsIgnoreCase(compare)) {
+								// System.err.println(Arrays.toString(temp));
+								p.deleteRow(j);
+								break;
+							}
+						}
+					}
+				}
+
+			}
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 
 	}
 
@@ -318,9 +485,55 @@ public class DBApp {
 	}
 
 	public static void main(String[] args) throws DBAppException, IOException,
-			DBEngineException {
-		main2();
+			DBEngineException, ClassNotFoundException {
+		// main2();
 
+		// update will update the age of the student with id=550 to 23
+
+		DBApp myDB = new DBApp();
+
+		// initialize it
+
+		myDB.init();
+		/*
+		 * Hashtable<String, String> fTblColNameType = new Hashtable<String,
+		 * String>(); fTblColNameType.put("ID", "Integer");
+		 * fTblColNameType.put("Name", "String");
+		 * 
+		 * Hashtable<String, String> fTblColNameRefs = new Hashtable<String,
+		 * String>();
+		 * 
+		 * myDB.createTable("Faculty", fTblColNameType, fTblColNameRefs, "ID");
+		 * 
+		 * Hashtable<String, Object> ftblColNameValue2 = new Hashtable<String,
+		 * Object>(); ftblColNameValue2.put("ID", Integer.valueOf("1"));
+		 * ftblColNameValue2.put("Name", "Management Technology");
+		 * myDB.insertIntoTable("Faculty", ftblColNameValue2);
+		 * 
+		 * Hashtable<String,Object> stblColNameValue = new
+		 * Hashtable<String,Object>(); stblColNameValue.put("Name", "koko" );
+		 * myDB.updateTable("Faculty","1",stblColNameValue);
+		 */
+		Hashtable<String, Object> stblColNameValue1 = new Hashtable<String, Object>();
+		stblColNameValue1.put("Name", "koko");
+
+		long startTime = System.currentTimeMillis();
+		Iterator myIt = myDB.selectFromTable("Faculty", stblColNameValue1,
+				"AND");
+		long endTime = System.currentTimeMillis();
+		long totalTime = endTime - startTime;
+		System.out.println(totalTime);
+		while (myIt.hasNext()) {
+			System.out.println(myIt.next());
+		}
+
+	/*	Hashtable<String, Object> stblColNameValue1 = new Hashtable<String, Object>();
+		stblColNameValue1.put("Name", "koko");
+
+		 myDB.deleteFromTable("Faculty", stblColNameValue1,
+				"AND");*/
+
+		
 	}
 
 	public static void main2() throws DBAppException, DBEngineException,

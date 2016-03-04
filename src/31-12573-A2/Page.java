@@ -31,7 +31,7 @@ public class Page implements Serializable {
 
 	public Page(String tableNameOrPageName, int columns) throws IOException {
 		this.columns = columns;
-		//DO NOT FOR THE LOVE OF GOD CHANGE THIS NUMBER
+		// DO NOT FOR THE LOVE OF GOD CHANGE THIS NUMBER
 		page = new String[max][columns + 1];
 		pageName = "" + (HardDrive.h.pages + 1) + ".class";
 		HardDrive.h.addPage(tableNameOrPageName, pageName);
@@ -40,7 +40,16 @@ public class Page implements Serializable {
 		w.flush();
 		save();
 	}
-	
+
+	public int findRow(String keyValue, int column) {
+		for (int i = 0; i < page.length; i++) {
+			if(page[i][column] !=null)
+			if (page[i][column].equals(keyValue)) {
+				return i;
+			}
+		}
+		return -1;
+	}
 
 	public boolean isFull() {
 		boolean full = true;
@@ -58,6 +67,21 @@ public class Page implements Serializable {
 				new File(pageName)));
 		oos.writeObject(this);
 		oos.close();
+	}
+
+	public void updateRow(String value, int row, int column) {
+		Date date = new Date();
+
+		page[row][column] = value;
+		page[row][page[row].length - 1] = date.toString();
+
+		try {
+			save();
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		System.out.println(Arrays.toString(page[row]));
 	}
 
 	public void writeRow(Hashtable<String, Object> htblColNameValue)
@@ -78,12 +102,15 @@ public class Page implements Serializable {
 		save();
 	}
 
-	public static void main(String[] args) throws FileNotFoundException, IOException, ClassNotFoundException {
-		ObjectInputStream ois = new ObjectInputStream(new FileInputStream(new File("6.class")));
-		Page p = (Page) ois.readObject();
-		for (int i = 0; i < p.page.length; i++) {
-			System.out.println(Arrays.toString(p.page[i]));
+	public void deleteRow(int row) throws FileNotFoundException, IOException {
+		// TODO Auto-generated method stub
+		for (int i = 0; i < page[row].length; i++) {
+			page[row][i] = null;
 		}
+		save();
+		System.err.println("deleted koko");
 	}
+
+	
 
 }
